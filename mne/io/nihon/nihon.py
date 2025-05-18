@@ -23,7 +23,7 @@ def _ensure_path(fname):
 
 
 @fill_doc
-def read_raw_nihon(fname, preload=False, verbose=None) -> "RawNihon":
+def read_raw_nihon(fname, preload=False, encoding="utf8", verbose=None) -> "RawNihon":
     """Reader for an Nihon Kohden EEG file.
 
     Parameters
@@ -44,7 +44,7 @@ def read_raw_nihon(fname, preload=False, verbose=None) -> "RawNihon":
     --------
     mne.io.Raw : Documentation of attributes and methods of RawNihon.
     """
-    return RawNihon(fname, preload, verbose)
+    return RawNihon(fname, preload, encoding, verbose)
 
 
 _valid_headers = [
@@ -276,7 +276,7 @@ def _read_nihon_header(fname):
     return header
 
 
-def _read_nihon_annotations(fname):
+def _read_nihon_annotations(fname, encoding):
     fname = _ensure_path(fname)
     log_fname = fname.with_suffix(".LOG")
     if not log_fname.exists():
@@ -300,15 +300,10 @@ def _read_nihon_annotations(fname):
             fid.seek(t_blk_address + 0x14)
             t_logs = np.fromfile(fid, "|S45", n_logs)
             for t_log in t_logs:
-                for enc in _encodings:
-                    try:
-                        t_log = t_log.decode(enc)
-                    except UnicodeDecodeError:
-                        pass
-                    else:
-                        break
-                else:
-                    warn(f"Could not decode log as one of {_encodings}")
+                try:
+                    t_log = t_log.decode(encoding)
+                except UnicodeDecodeError:
+                    warn(f"Could not decode log as {encoding}")
                     continue
                 t_desc = t_log[:20].strip("\x00")
                 t_onset = datetime.strptime(t_log[20:26], "%H%M%S")
@@ -378,7 +373,7 @@ class RawNihon(BaseRaw):
     """
 
     @verbose
-    def __init__(self, fname, preload=False, verbose=None):
+    def __init__(self, fname, preload=False, encoding="utf8", verbose=None):
         fname = _check_fname(fname, "read", True, "fname")
         data_name = fname.name
         logger.info(f"Loading {data_name}")
@@ -424,7 +419,7 @@ class RawNihon(BaseRaw):
         )
 
         # Get annotations from LOG file
-        annots = _read_nihon_annotations(fname)
+        annots = _read_nihon_annotations(fname, encoding)
 
         # Annotate acquisition skips
         controlblock = header["controlblocks"][0]
